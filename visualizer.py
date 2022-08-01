@@ -26,6 +26,7 @@ from viz import performance_widget
 from viz import capture_widget
 from viz import layer_widget
 from viz import equivariance_widget
+from server import tcp_server_non_blocking
 
 #----------------------------------------------------------------------------
 
@@ -320,11 +321,18 @@ def main(
         # Populate recent pickles list with pretrained model URLs.
         for url in pretrained:
             viz.add_recent_pickle(url)
+    
+    # server = ws.WSServer(7000, viz)
+    # server.Start()
+    server = tcp_server_non_blocking.TCPServerNonBlocking('127.0.0.1', 65432, viz)
+    server.configure_server()
 
     # Run.
-    while not viz.should_close():
-        viz.draw_frame()
-    viz.close()
+    # while not viz.should_close():
+    #     viz.draw_frame()
+    server.wait_for_client()
+    # viz.close()
+    # server.shutdown_server()
 
 #----------------------------------------------------------------------------
 
