@@ -22,7 +22,7 @@ class TruncationNoiseWidget:
         self.noise_anim     = False
 
     @imgui_utils.scoped_by_object_id
-    def __call__(self, show=True):
+    def __call__(self, show=True, override=None):
         viz = self.viz
         num_ws = viz.result.get('num_ws', 0)
         has_noise = viz.result.get('has_noise', False)
@@ -35,7 +35,7 @@ class TruncationNoiseWidget:
             imgui.text('Truncate')
             imgui.same_line(viz.label_w)
             with imgui_utils.item_width(viz.font_size * 10), imgui_utils.grayed_out(num_ws == 0):
-                _changed, self.trunc_psi = imgui.slider_float('##psi', self.trunc_psi, -1, 2, format='Psi %.2f')
+                _changed, self.trunc_psi = imgui.slider_float('##psi', override or self.trunc_psi, -1, 2, format='Psi %.2f')
             imgui.same_line()
             if num_ws == 0:
                 imgui_utils.button('Cutoff 0', width=(viz.font_size * 8 + viz.spacing), enabled=False)

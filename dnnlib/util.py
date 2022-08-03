@@ -52,7 +52,6 @@ class EasyDict(dict):
     def __delattr__(self, name: str) -> None:
         del self[name]
 
-
 class Logger(object):
     """Redirect stderr to stdout, optionally print stdout to a file, and optionally force flushing on both stdout and the file."""
 
