@@ -40,7 +40,8 @@ class Visualizer(imgui_window.ImguiWindow):
         super().__init__(title='GAN Visualizer', window_width=1920, window_height=1080)
 
         # ~bb
-        
+        self.showUi = True
+
         # Spout
         spoutSender = SpoutGL.SpoutSender()
         spoutSender.setSenderName('StyleGAN3')
@@ -139,19 +140,20 @@ class Visualizer(imgui_window.ImguiWindow):
         imgui.begin('##control_pane', closable=False, flags=(imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE))
 
         # Widgets.
-        expanded, _visible = imgui_utils.collapsing_header('Network & latent', default=True)
-        self.pickle_widget(expanded)
-        self.latent_widget(expanded)
-        self.stylemix_widget(expanded)
-        self.trunc_noise_widget(expanded, override=self.args.get('trunc_psi'))
-        expanded, _visible = imgui_utils.collapsing_header('Performance & capture', default=True)
-        self.perf_widget(expanded)
-        self.capture_widget(expanded)
-        expanded, _visible = imgui_utils.collapsing_header('Layers & channels', default=True)
-        self.layer_widget(expanded)
-        with imgui_utils.grayed_out(not self.result.get('has_input_transform', False)):
-            expanded, _visible = imgui_utils.collapsing_header('Equivariance', default=True)
-            self.eq_widget(expanded)
+        if self.showUi:
+          expanded, _visible = imgui_utils.collapsing_header('Network & latent', default=True)
+          self.pickle_widget(expanded)
+          # self.latent_widget(expanded)
+          self.stylemix_widget(expanded)
+          self.trunc_noise_widget(expanded, override=self.args.get('trunc_psi'))
+          expanded, _visible = imgui_utils.collapsing_header('Performance & capture', default=True)
+          self.perf_widget(expanded)
+          self.capture_widget(expanded)
+          expanded, _visible = imgui_utils.collapsing_header('Layers & channels', default=True)
+          self.layer_widget(expanded)
+          with imgui_utils.grayed_out(not self.result.get('has_input_transform', False)):
+              expanded, _visible = imgui_utils.collapsing_header('Equivariance', default=True)
+              self.eq_widget(expanded)
 
         # Render.
         if self.is_skipping_frames():
@@ -176,14 +178,15 @@ class Visualizer(imgui_window.ImguiWindow):
                     self._tex_obj = gl_utils.Texture(image=self._tex_img, bilinear=False, mipmap=False)
                 else:
                     self._tex_obj.update(self._tex_img)
-            zoom = min(max_w / self._tex_obj.width, max_h / self._tex_obj.height)
-            zoom = np.floor(zoom) if zoom >= 1 else zoom
-            self._tex_obj.draw(pos=pos, zoom=zoom, align=0.5, rint=True)
-
-            # ~bb
+            
+            ## Uncomment to draw in GUI
+            #  
+            # zoom = min(max_w / self._tex_obj.width, max_h / self._tex_obj.height)
+            # zoom = np.floor(zoom) if zoom >= 1 else zoom
+            # self._tex_obj.draw(pos=pos, zoom=zoom, align=0.5, rint=True)
+            
             self.spoutSender.sendTexture(self._tex_obj.gl_id, gl.GL_TEXTURE_2D, self._tex_obj.width, self._tex_obj.height, True, 0)
             self.spoutSender.setFrameSync('StyleGAN3')
-            # /
         if 'error' in self.result:
             self.print_error(self.result.error)
             if 'message' not in self.result:

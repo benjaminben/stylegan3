@@ -22,12 +22,10 @@ class UDPServer:
         # dec = self.reader(data)
         # print(dec)
         com = json.loads(data.decode('utf-8'))
-        print("received com: %s" % com)
         if com['type'] == "loadPickle":
           self.viz.load_pickle(com['data']['pkl'])
         elif com['type'] == "update": 
           self.viz.args.update(**com['data'])
-          print(self.viz.args)
     except BlockingIOError as e:
       pass
     except Exception as e:
