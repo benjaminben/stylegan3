@@ -19,6 +19,7 @@ from gui_utils import gl_utils
 from gui_utils import text_utils
 from viz import renderer
 from viz import pickle_widget
+from viz import pickle_mgmt
 from viz import latent_widget
 from viz import stylemix_widget
 from viz import trunc_noise_widget
@@ -30,17 +31,11 @@ from server import tcp_server_non_blocking
 from server import udp
 import OpenGL.GL as gl
 
-# import SpoutSDK
 import SpoutGL
 
-#----------------------------------------------------------------------------
-
-class Visualizer(imgui_window.ImguiWindow):
-    def __init__(self, capture_dir=None):
-        super().__init__(title='GAN Visualizer', window_width=1920, window_height=1080)
-
-        # ~bb
-        self.showUi = True
+class TDSG3Runtime(imgui_window.ImguiWindow):
+    def __init__(self):
+        super().__init__(title='GAN Visualizer', window_width=512, window_height=512)
 
         # Spout
         spoutSender = SpoutGL.SpoutSender()
@@ -49,8 +44,6 @@ class Visualizer(imgui_window.ImguiWindow):
 
         # TouchDesigner
         self.udpServer = udp.UDPServer(self)
-        
-        # /
 
         # Internals.
         self._last_error_print  = None
@@ -59,33 +52,14 @@ class Visualizer(imgui_window.ImguiWindow):
         self._tex_img           = None
         self._tex_obj           = None
 
-        # Widget interface.
         self.args               = dnnlib.EasyDict()
         self.result             = dnnlib.EasyDict()
-        self.pane_w             = 0
-        self.label_w            = 0
-        self.button_w           = 0
 
-        # Widgets.
-        self.pickle_widget      = pickle_widget.PickleWidget(self)
-        self.latent_widget      = latent_widget.LatentWidget(self)
-        self.stylemix_widget    = stylemix_widget.StyleMixingWidget(self)
-        self.trunc_noise_widget = trunc_noise_widget.TruncationNoiseWidget(self)
-        self.perf_widget        = performance_widget.PerformanceWidget(self)
-        self.capture_widget     = capture_widget.CaptureWidget(self)
-        self.layer_widget       = layer_widget.LayerWidget(self)
-        self.eq_widget          = equivariance_widget.EquivarianceWidget(self)
+        self.args['pkl'] = None
 
-        if capture_dir is not None:
-            self.capture_widget.path = capture_dir
-
-        # Initialize window.
-        self.set_position(0, 0)
-        self._adjust_font_size()
-        self.skip_frame() # Layout may change after first frame.
+        # self.pickle_mgmt        = pickle_mgmt.PickleMgmt(self)
 
     def close(self):
-        super().close()
         if self._async_renderer is not None:
             self._async_renderer.close()
             self._async_renderer = None
@@ -94,7 +68,8 @@ class Visualizer(imgui_window.ImguiWindow):
         self.pickle_widget.add_recent(pkl, ignore_errors=ignore_errors)
 
     def load_pickle(self, pkl, ignore_errors=False):
-        self.pickle_widget.load(pkl, ignore_errors=ignore_errors)
+        self.args['pkl'] = pkl
+        # self.pickle_mgmt.load(pkl, ignore_errors=ignore_errors)
 
     def print_error(self, error):
         error = str(error)
@@ -116,48 +91,13 @@ class Visualizer(imgui_window.ImguiWindow):
                 self.result.message = 'Switching rendering process...'
                 self.defer_rendering()
 
-    def _adjust_font_size(self):
-        old = self.font_size
-        self.set_font_size(min(self.content_width / 120, self.content_height / 60))
-        if self.font_size != old:
-            self.skip_frame() # Layout changed.
-
     def draw_frame(self):
+        # self.pickle_mgmt()
         self.begin_frame()
-        # self.args = dnnlib.EasyDict()
-        self.pane_w = self.font_size * 45
-        self.button_w = self.font_size * 5
-        self.label_w = round(self.font_size * 4.5)
-
-        # Detect mouse dragging in the result area.
-        dragging, dx, dy = imgui_utils.drag_hidden_window('##result_area', x=self.pane_w, y=0, width=self.content_width-self.pane_w, height=self.content_height)
-        if dragging:
-            self.latent_widget.drag(dx, dy)
-
-        # Begin control pane.
-        imgui.set_next_window_position(0, 0)
-        imgui.set_next_window_size(self.pane_w, self.content_height)
-        imgui.begin('##control_pane', closable=False, flags=(imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE))
-
-        # Widgets.
-        if self.showUi:
-          expanded, _visible = imgui_utils.collapsing_header('Network & latent', default=True)
-          self.pickle_widget(expanded)
-          # self.latent_widget(expanded)
-          self.stylemix_widget(expanded)
-          self.trunc_noise_widget(expanded, override=self.args.get('trunc_psi'))
-          expanded, _visible = imgui_utils.collapsing_header('Performance & capture', default=True)
-          self.perf_widget(expanded)
-          self.capture_widget(expanded)
-          expanded, _visible = imgui_utils.collapsing_header('Layers & channels', default=True)
-          self.layer_widget(expanded)
-          with imgui_utils.grayed_out(not self.result.get('has_input_transform', False)):
-              expanded, _visible = imgui_utils.collapsing_header('Equivariance', default=True)
-              self.eq_widget(expanded)
+        # imgui.begin('##control_pane', closable=False, flags=(imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE))
 
         # Render.
         if self.is_skipping_frames():
-            print("skipping frame")
             pass
         elif self._defer_rendering > 0:
             self._defer_rendering -= 1
@@ -167,23 +107,16 @@ class Visualizer(imgui_window.ImguiWindow):
             if result is not None:
                 self.result = result
 
-        # Display.
-        max_w = self.content_width - self.pane_w
-        max_h = self.content_height
-        pos = np.array([self.pane_w + max_w / 2, max_h / 2])
         if 'image' in self.result:
             if self._tex_img is not self.result.image:
                 self._tex_img = self.result.image
                 if self._tex_obj is None or not self._tex_obj.is_compatible(image=self._tex_img):
                     self._tex_obj = gl_utils.Texture(image=self._tex_img, bilinear=False, mipmap=False)
                 else:
+                    print(self.args.get('trunc_psi'))
                     self._tex_obj.update(self._tex_img)
-            
-            ## Uncomment to draw in GUI
-            #  
-            # zoom = min(max_w / self._tex_obj.width, max_h / self._tex_obj.height)
-            # zoom = np.floor(zoom) if zoom >= 1 else zoom
-            # self._tex_obj.draw(pos=pos, zoom=zoom, align=0.5, rint=True)
+
+            self._tex_obj.draw(pos=np.array([256,256]), zoom=1, align=0.5, rint=True)
             
             self.spoutSender.sendTexture(self._tex_obj.gl_id, gl.GL_TEXTURE_2D, self._tex_obj.width, self._tex_obj.height, True, 0)
             self.spoutSender.setFrameSync('StyleGAN3')
@@ -191,13 +124,9 @@ class Visualizer(imgui_window.ImguiWindow):
             self.print_error(self.result.error)
             if 'message' not in self.result:
                 self.result.message = str(self.result.error)
-        if 'message' in self.result:
-            tex = text_utils.get_texture(self.result.message, size=self.font_size, max_width=max_w, max_height=max_h, outline=2)
-            tex.draw(pos=pos, align=0.5, rint=True, color=1)
-
+        
         # End frame.
-        self._adjust_font_size()
-        imgui.end()
+        # imgui.end()
         self.end_frame()
 
 #----------------------------------------------------------------------------
@@ -303,57 +232,11 @@ def main(
 
     Optional PATH argument can be used specify which .pkl file to load.
     """
-    viz = Visualizer(capture_dir=capture_dir)
-
-    if browse_dir is not None:
-        viz.pickle_widget.search_dirs = [browse_dir]
-
-    # List pickles.
-    if len(pkls) > 0:
-        for pkl in pkls:
-            viz.add_recent_pickle(pkl)
-        viz.load_pickle(pkls[0])
-    else:
-        pretrained = [
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan3/versions/1/files/stylegan3-r-afhqv2-512x512.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan3/versions/1/files/stylegan3-r-ffhq-1024x1024.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan3/versions/1/files/stylegan3-r-ffhqu-1024x1024.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan3/versions/1/files/stylegan3-r-ffhqu-256x256.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan3/versions/1/files/stylegan3-r-metfaces-1024x1024.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan3/versions/1/files/stylegan3-r-metfacesu-1024x1024.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan3/versions/1/files/stylegan3-t-afhqv2-512x512.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan3/versions/1/files/stylegan3-t-ffhq-1024x1024.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan3/versions/1/files/stylegan3-t-ffhqu-1024x1024.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan3/versions/1/files/stylegan3-t-ffhqu-256x256.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan3/versions/1/files/stylegan3-t-metfaces-1024x1024.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan3/versions/1/files/stylegan3-t-metfacesu-1024x1024.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan2/versions/1/files/stylegan2-afhqcat-512x512.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan2/versions/1/files/stylegan2-afhqdog-512x512.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan2/versions/1/files/stylegan2-afhqv2-512x512.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan2/versions/1/files/stylegan2-afhqwild-512x512.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan2/versions/1/files/stylegan2-brecahad-512x512.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan2/versions/1/files/stylegan2-celebahq-256x256.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan2/versions/1/files/stylegan2-cifar10-32x32.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan2/versions/1/files/stylegan2-ffhq-1024x1024.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan2/versions/1/files/stylegan2-ffhq-256x256.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan2/versions/1/files/stylegan2-ffhq-512x512.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan2/versions/1/files/stylegan2-ffhqu-1024x1024.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan2/versions/1/files/stylegan2-ffhqu-256x256.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan2/versions/1/files/stylegan2-lsundog-256x256.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan2/versions/1/files/stylegan2-metfaces-1024x1024.pkl',
-            'https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan2/versions/1/files/stylegan2-metfacesu-1024x1024.pkl'
-        ]
-
-        # Populate recent pickles list with pretrained model URLs.
-        for url in pretrained:
-            viz.add_recent_pickle(url)
+    viz = TDSG3Runtime()
     
-    while not viz.should_close():
+    while True:
         viz.draw_frame()
-        # ~bb
         viz.udpServer.Receive()
-        # /
-    viz.close()
 
 #----------------------------------------------------------------------------
 

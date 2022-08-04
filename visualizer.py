@@ -26,30 +26,12 @@ from viz import performance_widget
 from viz import capture_widget
 from viz import layer_widget
 from viz import equivariance_widget
-from server import tcp_server_non_blocking
-from server import udp
-import OpenGL.GL as gl
-
-# import SpoutSDK
-import SpoutGL
 
 #----------------------------------------------------------------------------
 
 class Visualizer(imgui_window.ImguiWindow):
     def __init__(self, capture_dir=None):
-        super().__init__(title='GAN Visualizer', window_width=1920, window_height=1080)
-
-        # ~bb
-        
-        # Spout
-        spoutSender = SpoutGL.SpoutSender()
-        spoutSender.setSenderName('StyleGAN3')
-        self.spoutSender = spoutSender
-
-        # TouchDesigner
-        self.udpServer = udp.UDPServer(self)
-        
-        # /
+        super().__init__(title='GAN Visualizer', window_width=3840, window_height=2160)
 
         # Internals.
         self._last_error_print  = None
@@ -123,7 +105,7 @@ class Visualizer(imgui_window.ImguiWindow):
 
     def draw_frame(self):
         self.begin_frame()
-        # self.args = dnnlib.EasyDict()
+        self.args = dnnlib.EasyDict()
         self.pane_w = self.font_size * 45
         self.button_w = self.font_size * 5
         self.label_w = round(self.font_size * 4.5)
@@ -143,7 +125,7 @@ class Visualizer(imgui_window.ImguiWindow):
         self.pickle_widget(expanded)
         self.latent_widget(expanded)
         self.stylemix_widget(expanded)
-        self.trunc_noise_widget(expanded, override=self.args.get('trunc_psi'))
+        self.trunc_noise_widget(expanded)
         expanded, _visible = imgui_utils.collapsing_header('Performance & capture', default=True)
         self.perf_widget(expanded)
         self.capture_widget(expanded)
@@ -155,7 +137,6 @@ class Visualizer(imgui_window.ImguiWindow):
 
         # Render.
         if self.is_skipping_frames():
-            print("skipping frame")
             pass
         elif self._defer_rendering > 0:
             self._defer_rendering -= 1
@@ -179,11 +160,6 @@ class Visualizer(imgui_window.ImguiWindow):
             zoom = min(max_w / self._tex_obj.width, max_h / self._tex_obj.height)
             zoom = np.floor(zoom) if zoom >= 1 else zoom
             self._tex_obj.draw(pos=pos, zoom=zoom, align=0.5, rint=True)
-
-            # ~bb
-            self.spoutSender.sendTexture(self._tex_obj.gl_id, gl.GL_TEXTURE_2D, self._tex_obj.width, self._tex_obj.height, True, 0)
-            self.spoutSender.setFrameSync('StyleGAN3')
-            # /
         if 'error' in self.result:
             self.print_error(self.result.error)
             if 'message' not in self.result:
@@ -344,12 +320,10 @@ def main(
         # Populate recent pickles list with pretrained model URLs.
         for url in pretrained:
             viz.add_recent_pickle(url)
-    
+
+    # Run.
     while not viz.should_close():
         viz.draw_frame()
-        # ~bb
-        viz.udpServer.Receive()
-        # /
     viz.close()
 
 #----------------------------------------------------------------------------
