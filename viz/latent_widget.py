@@ -26,20 +26,38 @@ class LatentWidget:
         self.latent.y += dy / viz.font_size * 4e-2
 
     @imgui_utils.scoped_by_object_id
-    def __call__(self, show=True):
+    def __call__(self, show=True, override=False):
         viz = self.viz
         if show:
             imgui.text('Latent')
             imgui.same_line(viz.label_w)
-            seed = round(self.latent.x) + round(self.latent.y) * self.step_y
+            if override:
+                try:
+                    seed = override[0][0]
+                except:
+                    seed = round(self.latent.x) + round(self.latent.y) * self.step_y
+                    pass
+            else:
+                seed = round(self.latent.x) + round(self.latent.y) * self.step_y
             with imgui_utils.item_width(viz.font_size * 8):
                 changed, seed = imgui.input_int('##seed', seed)
                 if changed:
                     self.latent.x = seed
                     self.latent.y = 0
             imgui.same_line(viz.label_w + viz.font_size * 8 + viz.spacing)
-            frac_x = self.latent.x - round(self.latent.x)
-            frac_y = self.latent.y - round(self.latent.y)
+            frac_x = 0
+            frac_y = 0
+            if False and override:
+                try:
+                    frac_x = override[0][1]
+                    frac_y = override[1][1]
+                except:
+                    frac_x = self.latent.x - round(self.latent.x)
+                    frac_y = self.latent.y - round(self.latent.y)
+                    pass
+            else:
+                frac_x = self.latent.x - round(self.latent.x)
+                frac_y = self.latent.y - round(self.latent.y)
             with imgui_utils.item_width(viz.font_size * 5):
                 changed, (new_frac_x, new_frac_y) = imgui.input_float2('##frac', frac_x, frac_y, format='%+.2f', flags=imgui.INPUT_TEXT_ENTER_RETURNS_TRUE)
                 if changed:
@@ -66,13 +84,17 @@ class LatentWidget:
 
         if self.latent.anim:
             self.latent.x += viz.frame_delta * self.latent.speed
-        viz.args.w0_seeds = [] # [[seed, weight], ...]
-        for ofs_x, ofs_y in [[0, 0], [1, 0], [0, 1], [1, 1]]:
-            seed_x = np.floor(self.latent.x) + ofs_x
-            seed_y = np.floor(self.latent.y) + ofs_y
-            seed = (int(seed_x) + int(seed_y) * self.step_y) & ((1 << 32) - 1)
-            weight = (1 - abs(self.latent.x - seed_x)) * (1 - abs(self.latent.y - seed_y))
-            if weight > 0:
-                viz.args.w0_seeds.append([seed, weight])
+        if not bool(override):
+            viz.args.w0_seeds = [] # [[seed, weight], ...]
+            for ofs_x, ofs_y in [[0, 0], [1, 0], [0, 1], [1, 1]]:
+                seed_x = np.floor(self.latent.x) + ofs_x
+                seed_y = np.floor(self.latent.y) + ofs_y
+                seed = (int(seed_x) + int(seed_y) * self.step_y) & ((1 << 32) - 1)
+                weight = (1 - abs(self.latent.x - seed_x)) * (1 - abs(self.latent.y - seed_y))
+                if weight > 0:
+                    viz.args.w0_seeds.append([seed, weight])
+            print(viz.args.w0_seeds)
+        else:
+            print(viz.args.w0_seeds)
 
 #----------------------------------------------------------------------------

@@ -143,7 +143,8 @@ class Visualizer(imgui_window.ImguiWindow):
         if self.showUi:
           expanded, _visible = imgui_utils.collapsing_header('Network & latent', default=True)
           self.pickle_widget(expanded)
-          # self.latent_widget(expanded)
+          self.latent_widget(expanded, override=self.args.get('w0_seeds'))
+          # self.latent_widget(expanded, override=False)
           self.stylemix_widget(expanded)
           self.trunc_noise_widget(expanded, override=self.args.get('trunc_psi'))
           expanded, _visible = imgui_utils.collapsing_header('Performance & capture', default=True)
@@ -181,9 +182,9 @@ class Visualizer(imgui_window.ImguiWindow):
             
             ## Uncomment to draw in GUI
             #  
-            # zoom = min(max_w / self._tex_obj.width, max_h / self._tex_obj.height)
-            # zoom = np.floor(zoom) if zoom >= 1 else zoom
-            # self._tex_obj.draw(pos=pos, zoom=zoom, align=0.5, rint=True)
+            zoom = min(max_w / self._tex_obj.width, max_h / self._tex_obj.height)
+            zoom = np.floor(zoom) if zoom >= 1 else zoom
+            self._tex_obj.draw(pos=pos, zoom=zoom, align=0.5, rint=True)
             
             self.spoutSender.sendTexture(self._tex_obj.gl_id, gl.GL_TEXTURE_2D, self._tex_obj.width, self._tex_obj.height, True, 0)
             self.spoutSender.setFrameSync('StyleGAN3')
@@ -233,6 +234,7 @@ class AsyncRenderer:
     def set_args(self, **args):
         assert not self._closed
         if args != self._cur_args:
+            # print(args)
             if self._is_async:
                 self._set_args_async(**args)
             else:
