@@ -1,3 +1,6 @@
 *.pkl
 *.mp4
 *.mov
+artifacts
+__pycache__
+*.py[cod]
