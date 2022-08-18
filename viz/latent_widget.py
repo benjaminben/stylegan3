@@ -95,6 +95,7 @@ class LatentWidget:
                     viz.args.w0_seeds.append([seed, weight])
             print(viz.args.w0_seeds)
         else:
-            print(viz.args.w0_seeds)
+            boop = 0
+            #print(viz.args.w0_seeds)
 
 #----------------------------------------------------------------------------

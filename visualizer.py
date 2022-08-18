@@ -27,7 +27,7 @@ from viz import capture_widget
 from viz import layer_widget
 from viz import equivariance_widget
 from server import tcp_server_non_blocking
-from server import udp
+from server import server
 import OpenGL.GL as gl
 
 # import SpoutSDK
@@ -47,7 +47,7 @@ class Visualizer(imgui_window.ImguiWindow):
         self.spoutSender = spoutSender
 
         # TouchDesigner
-        self.udpServer = udp.UDPServer(self)
+        self.udpServer = server.UDPServer(self)
         
         # /
 

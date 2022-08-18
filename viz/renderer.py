@@ -242,6 +242,7 @@ class Renderer:
         fft_beta        = 8,
         input_transform = None,
         untransform     = False,
+        zlists          = None,
     ):
         # Dig up network details.
         G = self.get_network(pkl, 'G_ema')
@@ -265,9 +266,13 @@ class Renderer:
         all_seeds = list(set(all_seeds))
         all_zs = np.zeros([len(all_seeds), G.z_dim], dtype=np.float32)
         all_cs = np.zeros([len(all_seeds), G.c_dim], dtype=np.float32)
+        # print(zlists)
         for idx, seed in enumerate(all_seeds):
-            rnd = np.random.RandomState(seed)
-            all_zs[idx] = rnd.randn(G.z_dim)
+            try:
+                all_zs[idx] = np.array(zlists[idx]).astype(np.float32)
+            except Exception as e:
+                rnd = np.random.RandomState(seed)
+                all_zs[idx] = rnd.randn(G.z_dim)
             if G.c_dim > 0:
                 all_cs[idx, rnd.randint(G.c_dim)] = 1
 

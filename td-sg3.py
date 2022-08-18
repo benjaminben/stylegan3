@@ -27,10 +27,11 @@ from viz import capture_widget
 from viz import layer_widget
 from viz import equivariance_widget
 from server import tcp_server_non_blocking
-from server import udp
+from server import server
+from TCPThreadedServer import TCPThreadedServer
 import OpenGL.GL as gl
+import json
 
-# import SpoutSDK
 import SpoutGL
 
 #----------------------------------------------------------------------------
@@ -39,7 +40,6 @@ class Visualizer(imgui_window.ImguiWindow):
     def __init__(self, capture_dir=None):
         super().__init__(title='GAN Visualizer', window_width=1920, window_height=1080)
 
-        # ~bb
         self.showUi = True
 
         # Spout
@@ -48,9 +48,8 @@ class Visualizer(imgui_window.ImguiWindow):
         self.spoutSender = spoutSender
 
         # TouchDesigner
-        self.udpServer = udp.UDPServer(self)
-        
-        # /
+        self.server = server.UDPServer(self)
+        # self.server = server.TCPServer(self)
 
         # Internals.
         self._last_error_print  = None
@@ -83,6 +82,13 @@ class Visualizer(imgui_window.ImguiWindow):
         self.set_position(0, 0)
         self._adjust_font_size()
         self.skip_frame() # Layout may change after first frame.
+
+    def ReceiveMessage(self, client, address, data):
+        com = data
+        if com['type'] == "loadPickle":
+          self.load_pickle(com['data']['pkl'])
+        elif com['type'] == "update": 
+          self.args.update(**com['data'])
 
     def close(self):
         super().close()
@@ -292,6 +298,24 @@ class AsyncRenderer:
 
 #----------------------------------------------------------------------------
 
+def tcp_on_connected_callback(client, address):
+    #print('client connected', client, address)
+    # send the client a connection message
+    res = {
+        'cmd': 'connected',
+    }
+    response = json.dumps(res, default=str)
+    # add new line chr for TD
+    response += '\n'
+    client.send(response.encode('utf-8'))
+    return
+
+def tcp_on_disconnected_callback(client, address):
+    #print('client disconnected', client, address)
+    return
+
+#----------------------------------------------------------------------------
+
 @click.command()
 @click.argument('pkls', metavar='PATH', nargs=-1)
 @click.option('--capture-dir', help='Where to save screenshot captures', metavar='PATH', default=None)
@@ -306,6 +330,20 @@ def main(
     Optional PATH argument can be used specify which .pkl file to load.
     """
     viz = Visualizer(capture_dir=capture_dir)
+
+    tcpServer = TCPThreadedServer(
+        '127.0.0.1',
+        8008,
+        timeout=86400,
+        decode_json=True,
+        on_connected_callback=tcp_on_connected_callback,
+        on_receive_callback=lambda *argv : viz.ReceiveMessage(*argv),
+        on_disconnected_callback=tcp_on_disconnected_callback,
+        debug=True,
+        debug_data=True
+    )
+
+    tcpServer.start()
 
     if browse_dir is not None:
         viz.pickle_widget.search_dirs = [browse_dir]
@@ -352,9 +390,7 @@ def main(
     
     while not viz.should_close():
         viz.draw_frame()
-        # ~bb
-        viz.udpServer.Receive()
-        # /
+        viz.server.Receive()
     viz.close()
 
 #----------------------------------------------------------------------------
